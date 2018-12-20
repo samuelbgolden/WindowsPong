@@ -10,6 +10,10 @@ class Game(tk.Tk):
         self.ball = None
         self.playerBar = None
         self.computerBar = None
+        self.computerFlag = False
+        self.playerScore = None
+        self.computerScore = None
+        self.playerInput = 0
 
         # # # # menu # # # #
         self.menuFrame = tk.Frame(self)
@@ -51,6 +55,12 @@ class Game(tk.Tk):
         geom = self.winfo_geometry().split('+')
         self.geometry(geom[0] + '+{}+{}'.format(self.width//2 - int(geom[0].split('x')[0])//2, 0))
 
+        self.playerScore = ScoreBox(self)
+        self.computerScore = ScoreBox(self)
+
+        self.playerScore.geometry('{}x{}+{}+0'.format(self.width//12, self.height//10, self.width//3 - self.width//24))
+        self.computerScore.geometry('{}x{}+{}+0'.format(self.width//12, self.height//10, self.width//3 * 2 - self.width//24))
+
         self.ball = Ball(self)
         self.computerBar = ComputerBar(self)
         self.playerBar = PlayerBar(self)
@@ -61,7 +71,23 @@ class Game(tk.Tk):
         self.bind('<Down>', lambda e, y=self.playerBar.yvel: self.playerBar.move(y))
 
         self.after(1, self.move_ball)
+        self.after(1, self.move_computer)
         self.after(1, self.check_collisions)
+        self.after(1, self.increase_difficulty)
+
+        self.focus_set()
+
+    def increase_difficulty(self):
+        if self.ball.xvel > 0:
+            self.ball.xvel = 1 + (self.playerScore.get() + self.computerScore.get())//2
+        else:
+            self.ball.xvel = (1 + (self.playerScore.get() + self.computerScore.get())//2)*-1
+        if self.ball.yvel > 0:
+            self.ball.yvel = 1 + (self.playerScore.get() + self.computerScore.get())//4
+        else:
+            self.ball.yvel = (1 + (self.playerScore.get() + self.computerScore.get())//4)*-1
+
+        self.after(1, self.increase_difficulty)
 
     def move_ball(self):
         self.ball.move(self.ball.xvel, self.ball.yvel)
@@ -83,6 +109,45 @@ class Game(tk.Tk):
 
         self.after(1, self.check_collisions)
 
+    def move_computer(self):
+        if self.computerFlag:
+            if not self.ball.x > self.computerBar.x:
+                if (self.ball.y + self.ball.height//2) > (self.computerBar.y + self.computerBar.height//2):
+                    self.computerBar.move(self.computerBar.yvel)
+                if (self.ball.y + self.ball.height//2) < (self.computerBar.y + self.computerBar.height//2):
+                    self.computerBar.move(-self.computerBar.yvel)
+            self.computerFlag = False
+        else:
+            self.computerFlag = True
+        self.after(1, self.move_computer)
+
+
+class ScoreBox(tk.Toplevel):
+    def __init__(self, game, *args, **kwargs):
+        tk.Toplevel.__init__(self, *args, **kwargs)
+        self.game = game
+
+        self.config(bg='black')
+
+        self.score = tk.IntVar()
+        self.score.set(0)
+
+        self.font = ('Impact', round(-0.06 * self.game.height))
+        self.scoreLabel = tk.Label(self, textvariable=self.score, fg='white', bg='black', font=self.font)
+        self.scoreLabel.grid(row=0, column=0, sticky='nsew')
+
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+
+    def reset(self):
+        self.score.set(0)
+
+    def increment(self):
+        self.score.set(self.score.get() + 1)
+
+    def get(self):
+        return self.score.get()
+
 
 class ComputerBar(tk.Toplevel):
     def __init__(self, game, *args, **kwargs):
@@ -94,7 +159,7 @@ class ComputerBar(tk.Toplevel):
         self.height = self.width * 3
         self.x = self.game.width - self.width - self.width // 2
         self.y = (self.game.height // 2) - (self.height // 2)
-        self.yvel = 20
+        self.yvel = 1
 
         self.draw()
 
@@ -114,6 +179,12 @@ class PlayerBar(tk.Toplevel):
     def __init__(self, game, *args, **kwargs):
         tk.Toplevel.__init__(self, *args, **kwargs)
         self.game = game
+
+        self.font = ['Impact', round(-0.02 * self.game.height)]
+        self.label = tk.Label(self, text=' ^ \n | \n\nYOU\n\n | \n v ', font=self.font, fg='black', bg='white')
+        self.label.grid(row=0, column=0, sticky='nsew')
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
 
         self.config(bg='white')
         self.width = self.game.width // 15
@@ -158,11 +229,15 @@ class Ball(tk.Toplevel):
         self.draw()
 
     def check_boundaries(self):
-        if self.x < 0:
-            self.x = 0
+        if self.x <= 0:
+            self.x = self.game.width//2 - self.width//2
+            self.y = self.game.height//2 - self.height//2
+            self.game.computerScore.increment()
             self.xvel = -self.xvel
-        elif self.x > (self.game.width - self.width):
-            self.x = self.game.width - self.width
+        elif self.x >= (self.game.width - self.width):
+            self.x = self.game.width//2 - self.width//2
+            self.y = self.game.height//2 - self.height//2
+            self.game.playerScore.increment()
             self.xvel = -self.xvel
         elif self.y < 0:
             self.y = 0
